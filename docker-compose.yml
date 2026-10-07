@@ -1,0 +1,41 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: mime-audit:latest
+    container_name: mime-audit-api
+    environment:
+      MIME_AUDIT_HOST: 0.0.0.0
+      MIME_AUDIT_PORT: "8080"
+    # Host-side port is configurable via MIME_AUDIT_HOST_PORT (default 8080).
+    ports:
+      - "${MIME_AUDIT_HOST_PORT:-8080}:8080"
+    restart: unless-stopped
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import json,urllib.request,sys; r=urllib.request.urlopen('http://127.0.0.1:8080/health',timeout=3); sys.exit(0 if r.status==200 and json.load(r)['status']=='ok' else 1)"
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+
+  # One-shot verification: builds the same image, runs the test suite and
+  # submits a valid nested message plus a broken-boundary message to the
+  # running api service. Reports the result via its exit code and exits.
+  verify:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: mime-audit:latest
+    container_name: mime-audit-verify
+    depends_on:
+      api:
+        condition: service_healthy
+    environment:
+      MIME_AUDIT_BASE_URL: http://api:8080
+    command: ["python", "scripts/verify.py"]
+    restart: "no"
