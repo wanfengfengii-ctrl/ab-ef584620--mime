@@ -1,0 +1,33 @@
+# Research archiving platform - strict MIME audit service.
+#
+#   docker compose up app                          # run the API only
+#   docker compose up --exit-code-from verify verify   # build, test, report
+#
+# The host port is configurable: MIME_AUDIT_PORT=9000 docker compose up app
+services:
+  app:
+    build: .
+    image: mime-audit:latest
+    ports:
+      - "${MIME_AUDIT_PORT:-8080}:8080"
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request,sys;sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8080/healthz',timeout=2).status==200 else 1)"
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 5s
+
+  verify:
+    build: .
+    image: mime-audit:latest
+    depends_on:
+      app:
+        condition: service_healthy
+    environment:
+      APP_URL: http://app:8080
+    command: ["python", "-m", "app.verify"]
+    restart: "no"
